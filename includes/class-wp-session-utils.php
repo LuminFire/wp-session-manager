@@ -7,6 +7,18 @@
  */
 class WP_Session_Utils {
 	/**
+	 * Sanitize a potential Session ID so we aren't fetching broken data
+	 * from the options table.
+	 *
+	 * @param string $id
+	 *
+	 * @return string
+	 */
+	private function sanitize( $id ) {
+		return preg_replace( "/[^A-Za-z0-9_]/", '', $id );
+	}
+
+	/**
 	 * Count the total sessions in the database.
 	 *
 	 * @global wpdb $wpdb
@@ -32,36 +44,15 @@ class WP_Session_Utils {
 
 	/**
 	 * Create a new, random session in the database.
-	 *
-	 * @param null|string $date
 	 */
-	public static function create_dummy_session( $date = null ) {
-		// Generate our date
-		if ( null !== $date ) {
-			$time = strtotime( $date );
-
-			if ( false === $time ) {
-				$date = null;
-			} else {
-				$expires = date( 'U', strtotime( $date ) );
-			}
-		}
-
-		// If null was passed, or if the string parsing failed, fall back on a default
-		if ( null === $date ) {
-			/**
-			 * Filter the expiration of the session in the database
-			 *
-			 * @param int
-			 */
-			$expires = time() + (int) apply_filters( 'wp_session_expiration', 30 * 60 );
-		}
+	public static function create_dummy_session() {
+		$item = new \EAMann\Sessionz\Objects\Option("" );
 
 		$session_id = self::generate_id();
 
 		// Store the session
-		add_option( "_wp_session_{$session_id}", array(), '', 'no' );
-		add_option( "_wp_session_expires_{$session_id}", $expires, '', 'no' );
+		add_option( "_wp_session_{$session_id}", $item->data, '', 'no' );
+		add_option( "_wp_session_expires_{$session_id}", $item->time, '', 'no' );
 	}
 
 	/**
@@ -76,38 +67,23 @@ class WP_Session_Utils {
 	public static function delete_old_sessions( $limit = 1000 ) {
 		global $wpdb;
 
-		$limit = absint( $limit );
-		$keys = $wpdb->get_results( "SELECT option_name, option_value FROM $wpdb->options WHERE option_name LIKE '_wp_session_expires_%' ORDER BY option_value ASC LIMIT 0, {$limit}" );
+		$lifetime = intval( ini_get('session.gc_maxlifetime') );
+		$limit = intval( $limit );
 
-		$now = time();
-		$expired = array();
-		$count = 0;
+		// Session is expired if now - item.time > maxlifetime
+		// Said another way, if  item.time < now - maxlifetime
+		$filter = intval( time() - $lifetime );
+		$keys = $wpdb->get_results( "SELECT option_name, option_value FROM $wpdb->options WHERE option_name LIKE '_wp_session_expires_%' AND option_value > $filter ORDER BY option_value LIMIT 0, $limit" );
 
 		foreach( $keys as $expiration ) {
 			$key = $expiration->option_name;
-			$expires = $expiration->option_value;
+			$session_id = self::sanitize( substr( $key, 20 ) );
 
-			if ( $now > $expires ) {
-				$session_id = addslashes( substr( $key, 20 ) );
-
-				$expired[] = $key;
-				$expired[] = "_wp_session_{$session_id}";
-
-				$count += 1;
-			}
+			delete_option( "_wp_session_$session_id" );
+			delete_option( "_wp_session_expires_$session_id" );
 		}
 
-		// Delete expired sessions
-		if ( ! empty( $expired ) ) {
-		    $placeholders = array_fill( 0, count( $expired ), '%s' );
-		    $format = implode( ', ', $placeholders );
-		    $query = "DELETE FROM $wpdb->options WHERE option_name IN ($format)";
-
-		    $prepared = $wpdb->prepare( $query, $expired );
-			$wpdb->query( $prepared );
-		}
-
-		return $count;
+		return count( $keys );
 	}
 
 	/**

@@ -2,9 +2,9 @@
 Contributors:      ericmann
 Donate link:       http://jumping-duck.com/wordpress/plugins
 Tags:              session
-Requires at least: 3.4.2
+Requires at least: 4.7
 Tested up to:      4.7.4
-Stable tag:        1.2.1
+Stable tag:        2.0
 License:           GPLv2 or later
 License URI:       http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -54,6 +54,10 @@ None
 
 == Changelog ==
 
+= 2.0.0 =
+* Update: Refactor to use Sessionz
+* Update: Add encryption at rest if `WP_SESSION_ENC_KEY` is set
+
 = 1.2.1 =
 * Update: Additional filters for the `setcookie` parameters
 * Update: Expose the Session ID publicly
@@ -87,6 +91,9 @@ None
 * First version
 
 == Upgrade Notice ==
+
+= 2.0 =
+This version requires PHP 5.6 or higher and uses Composer-powered autoloading to incorporate Sessionz for transparent session management.
 
 = 1.0 =
 First version
